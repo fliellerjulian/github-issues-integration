@@ -7,6 +7,12 @@ interface Label {
   color: string | undefined;
 }
 
+interface TriageInfo {
+  status: "in_progress" | "completed";
+  sessionUrl: string | null;
+  confidence?: "low" | "medium" | "high";
+}
+
 interface Issue {
   id: number;
   number: number;
@@ -21,6 +27,7 @@ interface Issue {
   } | null;
   html_url: string;
   body: string | null;
+  triage: TriageInfo | null;
 }
 
 interface TriageStatus {
@@ -291,6 +298,33 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                       View Session
                     </a>
                   </div>
+                ) : issue.triage ? (
+                  <div className="flex flex-col gap-1">
+                    {issue.triage.status === "completed" && issue.triage.confidence ? (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
+                          issue.triage.confidence
+                        )}`}
+                      >
+                        {issue.triage.confidence} confidence
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
+                        In Progress
+                      </span>
+                    )}
+                    {issue.triage.sessionUrl && (
+                      <a
+                        href={issue.triage.sessionUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        View Session
+                      </a>
+                    )}
+                  </div>
                 ) : (
                   <span className="text-sm text-gray-400">Not triaged</span>
                 )}
@@ -306,7 +340,7 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
                       Triaging...
                     </>
-                  ) : triageStatuses[issue.number] ? (
+                  ) : triageStatuses[issue.number] || issue.triage ? (
                     "Re-triage"
                   ) : (
                     "Triage with Devin"

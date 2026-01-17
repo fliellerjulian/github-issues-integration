@@ -40,11 +40,16 @@ const TRIAGE_PROMPT_TEMPLATE = `You are analyzing a GitHub issue to determine if
 {issue_body}
 
 ## Your Task
-Analyze this issue and provide a triage assessment. Consider:
+This is a TRIAGE-ONLY task. You do NOT need to implement anything. Simply analyze this issue and provide your assessment.
+
+Analyze this issue and consider:
 1. Is the issue well-defined with clear requirements?
 2. Does it require access to external systems or credentials?
 3. Is it a coding task that Devin can handle autonomously?
 4. What is the complexity and estimated effort?
+
+## IMPORTANT: Complete this task immediately
+After analyzing the issue, update the structured output IMMEDIATELY with your assessment. Do not wait for additional instructions. This is a quick analysis task that should be completed in under 1 minute.
 
 Please update the structured output immediately with your assessment in this exact JSON format:
 {
@@ -61,7 +66,9 @@ Please update the structured output immediately with your assessment in this exa
 Confidence Score Guidelines:
 - HIGH: Clear requirements, standard coding task, no external dependencies
 - MEDIUM: Mostly clear but may need some clarification, moderate complexity
-- LOW: Vague requirements, needs external access, or highly complex architecture decisions`;
+- LOW: Vague requirements, needs external access, or highly complex architecture decisions
+
+Once you have updated the structured output with your assessment, your task is complete. Do not take any further action.`;
 
 export async function createTriageSession(
   issue: {
