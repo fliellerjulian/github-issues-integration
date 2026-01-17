@@ -23,6 +23,22 @@ interface Issue {
   body: string | null;
 }
 
+interface TriageStatus {
+  session_id: string;
+  session_url: string;
+  status: "pending" | "in_progress" | "completed";
+  result?: {
+    scope: string;
+    complexity: "low" | "medium" | "high";
+    estimated_effort: string;
+    confidence_score: "low" | "medium" | "high";
+    confidence_reasoning: string;
+    suggested_approach: string;
+    blockers: string[];
+    requires_human_input: boolean;
+  };
+}
+
 interface IssuesDashboardProps {
   owner: string;
   repo: string;
@@ -32,6 +48,8 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [triageStatuses, setTriageStatuses] = useState<Record<number, TriageStatus>>({});
+  const [triagingIssues, setTriagingIssues] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     async function fetchIssues() {
@@ -55,6 +73,70 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
 
     fetchIssues();
   }, [owner, repo]);
+
+  const handleTriage = async (issue: Issue) => {
+    setTriagingIssues((prev) => new Set(prev).add(issue.number));
+
+    try {
+      const response = await fetch("/api/triage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          issue: {
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            labels: issue.labels,
+            user: issue.user,
+            created_at: issue.created_at,
+          },
+          repository: {
+            full_name: `${owner}/${repo}`,
+            owner,
+            name: repo,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create triage session");
+      }
+
+      const data = await response.json();
+      setTriageStatuses((prev) => ({
+        ...prev,
+        [issue.number]: {
+          session_id: data.session_id,
+          session_url: data.session_url,
+          status: "pending",
+        },
+      }));
+    } catch (err) {
+      console.error("Triage error:", err);
+      alert("Failed to start triage. Please try again.");
+    } finally {
+      setTriagingIssues((prev) => {
+        const next = new Set(prev);
+        next.delete(issue.number);
+        return next;
+      });
+    }
+  };
+
+  const getConfidenceColor = (confidence: string) => {
+    switch (confidence) {
+      case "high":
+        return "bg-green-100 text-green-800";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800";
+      case "low":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
 
   if (loading) {
     return (
@@ -112,6 +194,12 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Created
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              Devin Triage
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              Actions
             </th>
           </tr>
         </thead>
@@ -176,6 +264,54 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                   month: "short",
                   day: "numeric",
                 })}
+              </td>
+              <td className="px-6 py-4">
+                {triageStatuses[issue.number] ? (
+                  <div className="flex flex-col gap-1">
+                    {triageStatuses[issue.number].result ? (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
+                          triageStatuses[issue.number].result!.confidence_score
+                        )}`}
+                      >
+                        {triageStatuses[issue.number].result!.confidence_score} confidence
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
+                        In Progress
+                      </span>
+                    )}
+                    <a
+                      href={triageStatuses[issue.number].session_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      View Session
+                    </a>
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-400">Not triaged</span>
+                )}
+              </td>
+              <td className="whitespace-nowrap px-6 py-4">
+                <button
+                  onClick={() => handleTriage(issue)}
+                  disabled={triagingIssues.has(issue.number)}
+                  className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {triagingIssues.has(issue.number) ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                      Triaging...
+                    </>
+                  ) : triageStatuses[issue.number] ? (
+                    "Re-triage"
+                  ) : (
+                    "Triage with Devin"
+                  )}
+                </button>
               </td>
             </tr>
           ))}
