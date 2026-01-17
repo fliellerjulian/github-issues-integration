@@ -46,7 +46,7 @@ interface Issue {
 interface TriageStatus {
   session_id: string;
   session_url: string;
-  status: "pending" | "in_progress" | "completed";
+  status: "pending" | "in_progress" | "completed" | "failed";
   result?: {
     scope: string;
     complexity: "low" | "medium" | "high";
@@ -111,7 +111,7 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
 
   useEffect(() => {
     const inProgressSessions = Object.entries(triageStatuses).filter(
-      ([, status]) => !status.result && status.status !== "completed"
+      ([, status]) => !status.result && status.status !== "completed" && status.status !== "failed"
     );
 
     if (inProgressSessions.length === 0) {
@@ -131,7 +131,19 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
         const issueNumber = parseInt(issueNumberStr, 10);
         const data = await pollTriageStatus(issueNumber, status.session_id);
         
-        if (data && (data.status === "stopped" || data.status === "blocked")) {
+        if (!data) {
+          continue;
+        }
+        
+        if (data.error || (data.is_complete && !data.triage_result)) {
+          setTriageStatuses((prev) => ({
+            ...prev,
+            [issueNumber]: {
+              ...prev[issueNumber],
+              status: "failed",
+            },
+          }));
+        } else if (data.triage_result || data.is_complete) {
           setTriageStatuses((prev) => ({
             ...prev,
             [issueNumber]: {
@@ -354,6 +366,11 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                       >
                         {triageStatuses[issue.number].result!.confidence_score} confidence
                       </span>
+                    ) : triageStatuses[issue.number].status === "failed" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                        Failed
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
@@ -369,7 +386,7 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                       View Session
                     </a>
                   </div>
-                ) : issue.triage ? (
+                ): issue.triage ? (
                   <div className="flex flex-col gap-1">
                     {issue.triage.status === "completed" && issue.triage.confidence ? (
                       <span

@@ -72,11 +72,13 @@ export async function GET(request: NextRequest) {
   try {
     const sessionDetails = await getSessionDetails(sessionId);
 
-    const isCompleted =
+    const hasTriageResult = !!sessionDetails.structured_output;
+    const isSessionEnded =
       sessionDetails.status === "stopped" ||
-      sessionDetails.status === "blocked";
+      sessionDetails.status === "blocked" ||
+      sessionDetails.status === "error";
 
-    if (isCompleted && sessionDetails.structured_output) {
+    if (hasTriageResult) {
       await updateTriageSession(sessionId, {
         status: "completed",
         structured_output: sessionDetails.structured_output,
@@ -91,11 +93,21 @@ export async function GET(request: NextRequest) {
       session_id: sessionDetails.session_id,
       status: sessionDetails.status,
       triage_result: sessionDetails.structured_output || null,
+      is_complete: hasTriageResult || isSessionEnded,
     });
   } catch (error) {
     console.error("Error fetching session details:", error);
+    
+    try {
+      await updateTriageSession(sessionId, {
+        status: "failed",
+      });
+    } catch (updateError) {
+      console.error("Error updating session to failed:", updateError);
+    }
+    
     return NextResponse.json(
-      { error: "Failed to fetch session details" },
+      { error: "Failed to fetch session details", is_complete: true },
       { status: 500 }
     );
   }
