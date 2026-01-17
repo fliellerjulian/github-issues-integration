@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 interface Label {
   name: string | undefined;
@@ -70,6 +70,7 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
   const [error, setError] = useState<string | null>(null);
   const [triageStatuses, setTriageStatuses] = useState<Record<number, TriageStatus>>({});
   const [triagingIssues, setTriagingIssues] = useState<Set<number>>(new Set());
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     async function fetchIssues() {
@@ -93,6 +94,63 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
 
     fetchIssues();
   }, [owner, repo]);
+
+  const pollTriageStatus = useCallback(async (issueNumber: number, sessionId: string) => {
+    try {
+      const response = await fetch(`/api/triage?session_id=${encodeURIComponent(sessionId)}`);
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return data;
+    } catch (err) {
+      console.error("Error polling triage status:", err);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const inProgressSessions = Object.entries(triageStatuses).filter(
+      ([, status]) => !status.result && status.status !== "completed"
+    );
+
+    if (inProgressSessions.length === 0) {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    if (pollingIntervalRef.current) {
+      return;
+    }
+
+    pollingIntervalRef.current = setInterval(async () => {
+      for (const [issueNumberStr, status] of inProgressSessions) {
+        const issueNumber = parseInt(issueNumberStr, 10);
+        const data = await pollTriageStatus(issueNumber, status.session_id);
+        
+        if (data && (data.status === "stopped" || data.status === "blocked")) {
+          setTriageStatuses((prev) => ({
+            ...prev,
+            [issueNumber]: {
+              ...prev[issueNumber],
+              status: "completed",
+              result: data.triage_result || undefined,
+            },
+          }));
+        }
+      }
+    }, 5000);
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [triageStatuses, pollTriageStatus]);
 
   const handleTriage = async (issue: Issue) => {
     setTriagingIssues((prev) => new Set(prev).add(issue.number));
