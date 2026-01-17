@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 
 interface Label {
   name: string | undefined;
@@ -70,7 +70,20 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
   const [error, setError] = useState<string | null>(null);
   const [triageStatuses, setTriageStatuses] = useState<Record<number, TriageStatus>>({});
   const [triagingIssues, setTriagingIssues] = useState<Set<number>>(new Set());
+  const [expandedTriageIssues, setExpandedTriageIssues] = useState<Set<number>>(new Set());
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const toggleTriageExpanded = (issueNumber: number) => {
+    setExpandedTriageIssues((prev) => {
+      const next = new Set(prev);
+      if (next.has(issueNumber)) {
+        next.delete(issueNumber);
+      } else {
+        next.add(issueNumber);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     async function fetchIssues() {
@@ -228,6 +241,64 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
     }
   };
 
+  const getComplexityColor = (complexity: string) => {
+    switch (complexity) {
+      case "high":
+        return "bg-red-100 text-red-800";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800";
+      case "low":
+        return "bg-green-100 text-green-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const renderTriageDetails = (result: TriageResult) => (
+    <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Scope</h4>
+          <p className="text-sm text-gray-600">{result.scope}</p>
+        </div>
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Suggested Approach</h4>
+          <p className="text-sm text-gray-600">{result.suggested_approach}</p>
+        </div>
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Complexity</h4>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getComplexityColor(result.complexity)}`}>
+            {result.complexity}
+          </span>
+        </div>
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Estimated Effort</h4>
+          <p className="text-sm text-gray-600">{result.estimated_effort}</p>
+        </div>
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Confidence Reasoning</h4>
+          <p className="text-sm text-gray-600">{result.confidence_reasoning}</p>
+        </div>
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Requires Human Input</h4>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${result.requires_human_input ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+            {result.requires_human_input ? "Yes" : "No"}
+          </span>
+        </div>
+        {result.blockers && result.blockers.length > 0 && (
+          <div className="md:col-span-2">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Blockers</h4>
+            <ul className="list-disc list-inside text-sm text-gray-600">
+              {result.blockers.map((blocker, index) => (
+                <li key={index}>{blocker}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -294,154 +365,203 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
-          {issues.map((issue) => (
-            <tr key={issue.id} className="hover:bg-gray-50">
-              <td className="px-6 py-4">
-                <div className="flex items-start gap-3">
-                  {issue.user && (
-                    <img
-                      src={issue.user.avatar_url}
-                      alt={issue.user.login}
-                      className="h-8 w-8 rounded-full"
-                    />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <a
-                      href={issue.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-gray-900 hover:text-blue-600"
-                    >
-                      {issue.title}
-                    </a>
-                    <p className="mt-1 text-sm text-gray-500">
-                      #{issue.number} opened by {issue.user?.login || "unknown"}
-                    </p>
-                  </div>
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex flex-wrap gap-1">
-                  {issue.labels.map((label, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-                      style={{
-                        backgroundColor: label.color
-                          ? `#${label.color}20`
-                          : "#e5e7eb",
-                        color: label.color ? `#${label.color}` : "#374151",
-                        border: `1px solid ${label.color ? `#${label.color}40` : "#d1d5db"}`,
-                      }}
-                    >
-                      {label.name}
+          {issues.map((issue) => {
+            const triageResult = triageStatuses[issue.number]?.result || issue.triage?.structuredOutput;
+            const isExpanded = expandedTriageIssues.has(issue.number);
+            const hasTriageResult = !!triageResult;
+            
+            return (
+              <React.Fragment key={issue.id}>
+                <tr className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="flex items-start gap-3">
+                      {issue.user && (
+                        <img
+                          src={issue.user.avatar_url}
+                          alt={issue.user.login}
+                          className="h-8 w-8 rounded-full"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <a
+                          href={issue.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-gray-900 hover:text-blue-600"
+                        >
+                          {issue.title}
+                        </a>
+                        <p className="mt-1 text-sm text-gray-500">
+                          #{issue.number} opened by {issue.user?.login || "unknown"}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {issue.labels.map((label, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                          style={{
+                            backgroundColor: label.color
+                              ? `#${label.color}20`
+                              : "#e5e7eb",
+                            color: label.color ? `#${label.color}` : "#374151",
+                            border: `1px solid ${label.color ? `#${label.color}40` : "#d1d5db"}`,
+                          }}
+                        >
+                          {label.name}
+                        </span>
+                      ))}
+                      {issue.labels.length === 0 && (
+                        <span className="text-sm text-gray-400">No labels</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                      {issue.state}
                     </span>
-                  ))}
-                  {issue.labels.length === 0 && (
-                    <span className="text-sm text-gray-400">No labels</span>
-                  )}
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
-                  {issue.state}
-                </span>
-              </td>
-              <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                {new Date(issue.created_at).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </td>
-              <td className="px-6 py-4">
-                {triageStatuses[issue.number] ? (
-                  <div className="flex flex-col gap-1">
-                    {triageStatuses[issue.number].result ? (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
-                          triageStatuses[issue.number].result!.confidence_score
-                        )}`}
-                      >
-                        {triageStatuses[issue.number].result!.confidence_score} confidence
-                      </span>
-                    ) : triageStatuses[issue.number].status === "failed" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-                        Failed
-                      </span>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                    {new Date(issue.created_at).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </td>
+                  <td className="px-6 py-4">
+                    {triageStatuses[issue.number] ? (
+                      <div className="flex flex-col gap-1">
+                        {triageStatuses[issue.number].result ? (
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
+                                triageStatuses[issue.number].result!.confidence_score
+                              )}`}
+                            >
+                              {triageStatuses[issue.number].result!.confidence_score} confidence
+                            </span>
+                            <button
+                              onClick={() => toggleTriageExpanded(issue.number)}
+                              className="text-gray-500 hover:text-gray-700 transition-colors"
+                              title={isExpanded ? "Collapse details" : "Expand details"}
+                            >
+                              <svg
+                                className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : triageStatuses[issue.number].status === "failed" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                            Failed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
+                            In Progress
+                          </span>
+                        )}
+                        <a
+                          href={triageStatuses[issue.number].session_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          View Session
+                        </a>
+                      </div>
+                    ): issue.triage ? (
+                      <div className="flex flex-col gap-1">
+                        {issue.triage.status === "completed" && issue.triage.confidence ? (
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
+                                issue.triage.confidence
+                              )}`}
+                            >
+                              {issue.triage.confidence} confidence
+                            </span>
+                            {issue.triage.structuredOutput && (
+                              <button
+                                onClick={() => toggleTriageExpanded(issue.number)}
+                                className="text-gray-500 hover:text-gray-700 transition-colors"
+                                title={isExpanded ? "Collapse details" : "Expand details"}
+                              >
+                                <svg
+                                  className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        ) : issue.triage.status === "failed" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                            Failed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
+                            In Progress
+                          </span>
+                        )}
+                        {issue.triage.sessionUrl && (
+                          <a
+                            href={issue.triage.sessionUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            View Session
+                          </a>
+                        )}
+                      </div>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
-                        In Progress
-                      </span>
+                      <span className="text-sm text-gray-400">Not triaged</span>
                     )}
-                    <a
-                      href={triageStatuses[issue.number].session_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline"
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <button
+                      onClick={() => handleTriage(issue)}
+                      disabled={triagingIssues.has(issue.number)}
+                      className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      View Session
-                    </a>
-                  </div>
-                ): issue.triage ? (
-                  <div className="flex flex-col gap-1">
-                    {issue.triage.status === "completed" && issue.triage.confidence ? (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
-                          issue.triage.confidence
-                        )}`}
-                      >
-                        {issue.triage.confidence} confidence
-                      </span>
-                    ) : issue.triage.status === "failed" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-                        Failed
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
-                        In Progress
-                      </span>
-                    )}
-                    {issue.triage.sessionUrl && (
-                      <a
-                        href={issue.triage.sessionUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        View Session
-                      </a>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-sm text-gray-400">Not triaged</span>
+                      {triagingIssues.has(issue.number) ? (
+                        <>
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                          Triaging...
+                        </>
+                      ) : triageStatuses[issue.number] || issue.triage ? (
+                        "Re-triage"
+                      ) : (
+                        "Triage with Devin"
+                      )}
+                    </button>
+                  </td>
+                </tr>
+                {isExpanded && hasTriageResult && triageResult && (
+                  <tr>
+                    <td colSpan={6} className="p-0">
+                      {renderTriageDetails(triageResult)}
+                    </td>
+                  </tr>
                 )}
-              </td>
-              <td className="whitespace-nowrap px-6 py-4">
-                <button
-                  onClick={() => handleTriage(issue)}
-                  disabled={triagingIssues.has(issue.number)}
-                  className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {triagingIssues.has(issue.number) ? (
-                    <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                      Triaging...
-                    </>
-                  ) : triageStatuses[issue.number] || issue.triage ? (
-                    "Re-triage"
-                  ) : (
-                    "Triage with Devin"
-                  )}
-                </button>
-              </td>
-            </tr>
-          ))}
+              </React.Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
