@@ -1,17 +1,39 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { IssuesDashboard } from "./IssuesDashboard";
 import { LoginButton } from "./LoginButton";
 import { RepoSelector } from "./RepoSelector";
 
+function getInitialRepo(searchParams: URLSearchParams): { owner: string; repo: string } | null {
+  const repoParam = searchParams.get("repo");
+  if (repoParam && repoParam.includes("/")) {
+    const [owner, repo] = repoParam.split("/");
+    return { owner, repo };
+  }
+  return null;
+}
+
 export function Dashboard() {
   const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [selectedRepo, setSelectedRepo] = useState<{
     owner: string;
     repo: string;
-  } | null>(null);
+  } | null>(() => getInitialRepo(searchParams));
+
+  const handleSelectRepo = useCallback((owner: string, repo: string) => {
+    setSelectedRepo({ owner, repo });
+    router.push(`?repo=${owner}/${repo}`, { scroll: false });
+  }, [router]);
+
+  const handleClearRepo = useCallback(() => {
+    setSelectedRepo(null);
+    router.push("/", { scroll: false });
+  }, [router]);
 
   if (status === "loading") {
     return (
@@ -81,12 +103,12 @@ export function Dashboard() {
               <h2 className="mb-4 text-lg font-semibold text-gray-900">
                 Select Repository
               </h2>
-              <RepoSelector
-                onSelectRepo={(owner, repo) => setSelectedRepo({ owner, repo })}
-                selectedRepo={
-                  selectedRepo ? `${selectedRepo.owner}/${selectedRepo.repo}` : null
-                }
-              />
+                            <RepoSelector
+                              onSelectRepo={handleSelectRepo}
+                              selectedRepo={
+                                selectedRepo ? `${selectedRepo.owner}/${selectedRepo.repo}` : null
+                              }
+                            />
             </div>
           </div>
 
@@ -97,12 +119,12 @@ export function Dashboard() {
                   <h2 className="text-lg font-semibold text-gray-900">
                     Open Issues in {selectedRepo.owner}/{selectedRepo.repo}
                   </h2>
-                  <button
-                    onClick={() => setSelectedRepo(null)}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Change repository
-                  </button>
+                                    <button
+                                      onClick={handleClearRepo}
+                                      className="text-sm text-gray-500 hover:text-gray-700"
+                                    >
+                                      Change repository
+                                    </button>
                 </div>
                 <IssuesDashboard
                   owner={selectedRepo.owner}

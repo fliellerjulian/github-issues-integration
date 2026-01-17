@@ -1,6 +1,25 @@
 import { auth } from "@/auth";
 import { Octokit } from "@octokit/rest";
 import { NextRequest, NextResponse } from "next/server";
+import { getLatestTriageForIssues, TriageSession } from "@/lib/supabase";
+
+interface TriageInfo {
+  status: "pending" | "in_progress" | "completed" | "failed";
+  sessionUrl: string | null;
+  sessionId: string | null;
+  confidence?: "low" | "medium" | "high";
+  structuredOutput?: TriageSession["structured_output"];
+}
+
+function mapTriageSessionToInfo(session: TriageSession): TriageInfo {
+  return {
+    status: session.status,
+    sessionUrl: session.session_url,
+    sessionId: session.session_id,
+    confidence: session.structured_output?.confidence_score,
+    structuredOutput: session.structured_output,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -32,9 +51,16 @@ export async function GET(request: NextRequest) {
       per_page: 100,
     });
 
-    const filteredIssues = issues
-      .filter((issue) => !issue.pull_request)
-      .map((issue) => ({
+    const filteredIssues = issues.filter((issue) => !issue.pull_request);
+
+    const issueNumbers = filteredIssues.map((issue) => issue.number);
+    const triageSessions = await getLatestTriageForIssues(owner, repo, issueNumbers);
+
+    const issuesWithTriage = filteredIssues.map((issue) => {
+      const triageSession = triageSessions.get(issue.number);
+      const triageInfo = triageSession ? mapTriageSessionToInfo(triageSession) : null;
+
+      return {
         id: issue.id,
         number: issue.number,
         title: issue.title,
@@ -54,9 +80,11 @@ export async function GET(request: NextRequest) {
           : null,
         html_url: issue.html_url,
         body: issue.body,
-      }));
+        triage: triageInfo,
+      };
+    });
 
-    return NextResponse.json(filteredIssues);
+    return NextResponse.json(issuesWithTriage);
   } catch (error) {
     console.error("Error fetching issues:", error);
     return NextResponse.json(
