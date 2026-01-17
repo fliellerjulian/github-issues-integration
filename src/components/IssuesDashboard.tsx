@@ -7,10 +7,23 @@ interface Label {
   color: string | undefined;
 }
 
+interface TriageResult {
+  scope: string;
+  complexity: "low" | "medium" | "high";
+  estimated_effort: string;
+  confidence_score: "low" | "medium" | "high";
+  confidence_reasoning: string;
+  suggested_approach: string;
+  blockers: string[];
+  requires_human_input: boolean;
+}
+
 interface TriageInfo {
-  status: "in_progress" | "completed";
+  status: "pending" | "in_progress" | "completed" | "failed";
   sessionUrl: string | null;
+  sessionId: string | null;
   confidence?: "low" | "medium" | "high";
+  structuredOutput?: TriageResult | null;
 }
 
 interface Issue {
@@ -307,6 +320,11 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                         )}`}
                       >
                         {issue.triage.confidence} confidence
+                      </span>
+                    ) : issue.triage.status === "failed" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                        Failed
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">

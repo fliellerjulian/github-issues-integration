@@ -1,38 +1,24 @@
 import { auth } from "@/auth";
 import { Octokit } from "@octokit/rest";
 import { NextRequest, NextResponse } from "next/server";
+import { getLatestTriageForIssues, TriageSession } from "@/lib/supabase";
 
 interface TriageInfo {
-  status: "in_progress" | "completed";
+  status: "pending" | "in_progress" | "completed" | "failed";
   sessionUrl: string | null;
+  sessionId: string | null;
   confidence?: "low" | "medium" | "high";
+  structuredOutput?: TriageSession["structured_output"];
 }
 
-function parseTriageComment(body: string): TriageInfo | null {
-  if (!body.includes("Devin Triage")) {
-    return null;
-  }
-
-  const sessionUrlMatch = body.match(/\[View Devin Session\]\((https:\/\/app\.devin\.ai\/sessions\/[^)]+)\)/);
-  const sessionUrl = sessionUrlMatch ? sessionUrlMatch[1] : null;
-
-  if (body.includes("Triage In Progress")) {
-    return { status: "in_progress", sessionUrl };
-  }
-
-  if (body.includes("Triage Assessment")) {
-    let confidence: "low" | "medium" | "high" | undefined;
-    if (body.includes("🟢") && body.includes("high")) {
-      confidence = "high";
-    } else if (body.includes("🟡") && body.includes("medium")) {
-      confidence = "medium";
-    } else if (body.includes("🔴") && body.includes("low")) {
-      confidence = "low";
-    }
-    return { status: "completed", sessionUrl, confidence };
-  }
-
-  return { status: "in_progress", sessionUrl };
+function mapTriageSessionToInfo(session: TriageSession): TriageInfo {
+  return {
+    status: session.status,
+    sessionUrl: session.session_url,
+    sessionId: session.session_id,
+    confidence: session.structured_output?.confidence_score,
+    structuredOutput: session.structured_output,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -67,55 +53,36 @@ export async function GET(request: NextRequest) {
 
     const filteredIssues = issues.filter((issue) => !issue.pull_request);
 
-    const issuesWithTriage = await Promise.all(
-      filteredIssues.map(async (issue) => {
-        let triageInfo: TriageInfo | null = null;
+    const issueNumbers = filteredIssues.map((issue) => issue.number);
+    const triageSessions = await getLatestTriageForIssues(owner, repo, issueNumbers);
 
-        try {
-          const { data: comments } = await octokit.issues.listComments({
-            owner,
-            repo,
-            issue_number: issue.number,
-            per_page: 50,
-          });
+    const issuesWithTriage = filteredIssues.map((issue) => {
+      const triageSession = triageSessions.get(issue.number);
+      const triageInfo = triageSession ? mapTriageSessionToInfo(triageSession) : null;
 
-          for (const comment of comments.reverse()) {
-            if (comment.body) {
-              const parsed = parseTriageComment(comment.body);
-              if (parsed) {
-                triageInfo = parsed;
-                break;
-              }
+      return {
+        id: issue.id,
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        labels: issue.labels.map((label) =>
+          typeof label === "string"
+            ? { name: label, color: "gray" }
+            : { name: label.name, color: label.color }
+        ),
+        created_at: issue.created_at,
+        updated_at: issue.updated_at,
+        user: issue.user
+          ? {
+              login: issue.user.login,
+              avatar_url: issue.user.avatar_url,
             }
-          }
-        } catch (err) {
-          console.error(`Error fetching comments for issue #${issue.number}:`, err);
-        }
-
-        return {
-          id: issue.id,
-          number: issue.number,
-          title: issue.title,
-          state: issue.state,
-          labels: issue.labels.map((label) =>
-            typeof label === "string"
-              ? { name: label, color: "gray" }
-              : { name: label.name, color: label.color }
-          ),
-          created_at: issue.created_at,
-          updated_at: issue.updated_at,
-          user: issue.user
-            ? {
-                login: issue.user.login,
-                avatar_url: issue.user.avatar_url,
-              }
-            : null,
-          html_url: issue.html_url,
-          body: issue.body,
-          triage: triageInfo,
-        };
-      })
-    );
+          : null,
+        html_url: issue.html_url,
+        body: issue.body,
+        triage: triageInfo,
+      };
+    });
 
     return NextResponse.json(issuesWithTriage);
   } catch (error) {

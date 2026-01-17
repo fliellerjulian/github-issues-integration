@@ -26,49 +26,41 @@ export interface DevinSessionDetails {
   structured_output?: TriageResult;
 }
 
-const TRIAGE_PROMPT_TEMPLATE = `You are analyzing a GitHub issue to determine if Devin (an AI software engineer) can work on it.
+const TRIAGE_PROMPT_TEMPLATE = `Triage this GitHub issue and assess if you can work on it autonomously.
 
-## Issue Details
-**Repository:** {repo_full_name}
-**Issue #:** {issue_number}
+## Issue
+**Repo:** {repo_full_name} | **Issue #:** {issue_number}
 **Title:** {issue_title}
 **Labels:** {issue_labels}
-**Created by:** {issue_author}
-**Created at:** {issue_created_at}
+**Author:** {issue_author} | **Created:** {issue_created_at}
 
 **Description:**
 {issue_body}
 
-## Your Task
-This is a TRIAGE-ONLY task. You do NOT need to implement anything. Simply analyze this issue and provide your assessment.
+## Instructions
+This is a TRIAGE-ONLY task - do NOT implement anything. Analyze the issue and update the structured output IMMEDIATELY with your assessment. Complete this in under 1 minute.
 
-Analyze this issue and consider:
-1. Is the issue well-defined with clear requirements?
-2. Does it require access to external systems or credentials?
-3. Is it a coding task that Devin can handle autonomously?
-4. What is the complexity and estimated effort?
+Consider:
+- Are requirements clear and well-defined?
+- Is this a standard coding task you can handle autonomously?
+- Are there external dependencies or credentials needed?
+- What's the complexity and effort estimate?
 
-## IMPORTANT: Complete this task immediately
-After analyzing the issue, update the structured output IMMEDIATELY with your assessment. Do not wait for additional instructions. This is a quick analysis task that should be completed in under 1 minute.
-
-Please update the structured output immediately with your assessment in this exact JSON format:
+Update structured output with this JSON format:
 {
   "scope": "Brief description of what needs to be done",
   "complexity": "low" | "medium" | "high",
   "estimated_effort": "1-2 hours" | "2-4 hours" | "4-8 hours" | "8+ hours",
   "confidence_score": "low" | "medium" | "high",
-  "confidence_reasoning": "Explanation of why Devin can or cannot handle this issue",
-  "suggested_approach": "How Devin would approach solving this issue",
-  "blockers": ["List of potential blockers or missing information"],
+  "confidence_reasoning": "Why you can or cannot handle this",
+  "suggested_approach": "How you would solve this",
+  "blockers": ["Potential blockers or missing info"],
   "requires_human_input": true | false
 }
 
-Confidence Score Guidelines:
-- HIGH: Clear requirements, standard coding task, no external dependencies
-- MEDIUM: Mostly clear but may need some clarification, moderate complexity
-- LOW: Vague requirements, needs external access, or highly complex architecture decisions
+Confidence: HIGH = clear requirements, standard task, no external deps | MEDIUM = mostly clear, moderate complexity | LOW = vague, needs external access, complex architecture
 
-Once you have updated the structured output with your assessment, your task is complete. Do not take any further action.`;
+Update structured output now and complete the task.`;
 
 export async function createTriageSession(
   issue: {

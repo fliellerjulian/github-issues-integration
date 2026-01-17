@@ -1,11 +1,13 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import {
-  createTriageSession,
+  createTriageSession as createDevinSession,
   getSessionDetails,
-  postTriageResultToGitHub,
-  TriageResult,
 } from "@/lib/devin";
+import {
+  createTriageSession,
+  updateTriageSession,
+} from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -25,16 +27,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const devinSession = await createTriageSession(issue, repository);
+    const devinSession = await createDevinSession(issue, repository);
 
-    await postTriageResultToGitHub(
-      repository.owner,
-      repository.name,
-      issue.number,
-      devinSession.url,
-      null,
-      session.accessToken
-    );
+    await createTriageSession({
+      repo_owner: repository.owner,
+      repo_name: repository.name,
+      issue_number: issue.number,
+      session_id: devinSession.session_id,
+      session_url: devinSession.url,
+      status: "in_progress",
+    });
 
     return NextResponse.json({
       session_id: devinSession.session_id,
@@ -70,15 +72,25 @@ export async function GET(request: NextRequest) {
   try {
     const sessionDetails = await getSessionDetails(sessionId);
 
-    let triageResult: TriageResult | null = null;
-    if (sessionDetails.structured_output) {
-      triageResult = sessionDetails.structured_output;
+    const isCompleted =
+      sessionDetails.status === "stopped" ||
+      sessionDetails.status === "blocked";
+
+    if (isCompleted && sessionDetails.structured_output) {
+      await updateTriageSession(sessionId, {
+        status: "completed",
+        structured_output: sessionDetails.structured_output,
+      });
+    } else if (sessionDetails.status === "error") {
+      await updateTriageSession(sessionId, {
+        status: "failed",
+      });
     }
 
     return NextResponse.json({
       session_id: sessionDetails.session_id,
       status: sessionDetails.status,
-      triage_result: triageResult,
+      triage_result: sessionDetails.structured_output || null,
     });
   } catch (error) {
     console.error("Error fetching session details:", error);
