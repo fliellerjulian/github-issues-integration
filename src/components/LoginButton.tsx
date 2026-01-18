@@ -18,17 +18,12 @@ export function LoginButton() {
 
   if (session) {
     return (
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-600">
-          Signed in as {session.user?.name || session.user?.email}
-        </span>
-        <button
-          onClick={() => signOut()}
-          className="rounded-lg bg-red-500 px-4 py-2 text-white transition-colors hover:bg-red-600"
-        >
-          Sign out
-        </button>
-      </div>
+      <button
+        onClick={() => signOut()}
+        className="rounded-lg bg-gray-200 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-300"
+      >
+        Sign out
+      </button>
     );
   }
 
