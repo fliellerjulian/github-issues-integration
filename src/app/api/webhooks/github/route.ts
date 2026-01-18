@@ -5,6 +5,7 @@ import {
   GitHubIssueCommentWebhookPayload,
 } from "@/lib/github-webhook";
 import { createTriageSession, postTriageResultToGitHub } from "@/lib/devin";
+import { upsertIssueWorkflow } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -66,6 +67,19 @@ async function handleIssueEvent(payload: GitHubIssueWebhookPayload) {
     const session = await createTriageSession(issue, repository);
 
     console.log(`Created Devin session: ${session.session_id}`);
+
+    try {
+      await upsertIssueWorkflow({
+        repo_owner: repository.owner.login,
+        repo_name: repository.name,
+        issue_number: issue.number,
+        workflow_status: "new",
+        triage_session_id: session.session_id,
+        triage_session_url: session.url,
+      });
+    } catch (workflowError) {
+      console.error("Error updating workflow (non-blocking):", workflowError);
+    }
 
     const githubToken = process.env.GITHUB_ACCESS_TOKEN;
     if (githubToken) {

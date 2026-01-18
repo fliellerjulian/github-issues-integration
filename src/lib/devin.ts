@@ -24,6 +24,9 @@ export interface DevinSessionDetails {
   created_at: string;
   updated_at: string;
   structured_output?: TriageResult;
+  pull_request?: {
+    url: string;
+  };
 }
 
 const TRIAGE_PROMPT_TEMPLATE = `Triage this GitHub issue and assess if you can work on it autonomously.
@@ -61,6 +64,35 @@ Update structured output with this JSON format:
 Confidence: HIGH = clear requirements, standard task, no external deps | MEDIUM = mostly clear, moderate complexity | LOW = vague, needs external access, complex architecture
 
 Update structured output now and complete the task.`;
+
+const PR_CREATION_PROMPT_TEMPLATE = `Implement a fix for this GitHub issue and create a Pull Request.
+
+## Issue
+**Repo:** {repo_full_name} | **Issue #:** {issue_number}
+**Title:** {issue_title}
+**Labels:** {issue_labels}
+**Author:** {issue_author} | **Created:** {issue_created_at}
+
+**Description:**
+{issue_body}
+
+## Triage Assessment
+**Scope:** {triage_scope}
+**Suggested Approach:** {triage_approach}
+**Estimated Effort:** {triage_effort}
+
+## Instructions
+1. Clone the repository and create a new branch for this fix
+2. Implement the changes following the suggested approach
+3. Run any existing tests and linting to ensure quality
+4. Create a Pull Request with a clear description referencing issue #{issue_number}
+5. The PR should close the issue when merged (use "Closes #{issue_number}" in the PR description)
+
+Important:
+- Follow the existing code style and conventions in the repository
+- Write clean, maintainable code
+- If you encounter any blockers or need clarification, ask for help
+- Make sure all tests pass before creating the PR`;
 
 export async function createTriageSession(
   issue: {
@@ -105,6 +137,58 @@ export async function createTriageSession(
   if (!response.ok) {
     const error = await response.text();
     throw new Error(`Failed to create Devin session: ${error}`);
+  }
+
+  return response.json();
+}
+
+export async function createPRSession(
+  issue: {
+    number: number;
+    title: string;
+    body: string | null;
+    labels: Array<{ name: string }>;
+    user: { login: string } | null;
+    created_at: string;
+  },
+  repo: {
+    full_name: string;
+  },
+  triageResult: TriageResult
+): Promise<DevinSession> {
+  const apiKey = process.env.DEVIN_API_KEY;
+  if (!apiKey) {
+    throw new Error("DEVIN_API_KEY is not configured");
+  }
+
+  const prompt = PR_CREATION_PROMPT_TEMPLATE
+    .replace("{repo_full_name}", repo.full_name)
+    .replace(/{issue_number}/g, String(issue.number))
+    .replace("{issue_title}", issue.title)
+    .replace("{issue_labels}", issue.labels.map((l) => l.name).join(", ") || "None")
+    .replace("{issue_author}", issue.user?.login || "Unknown")
+    .replace("{issue_created_at}", issue.created_at)
+    .replace("{issue_body}", issue.body || "No description provided")
+    .replace("{triage_scope}", triageResult.scope)
+    .replace("{triage_approach}", triageResult.suggested_approach)
+    .replace("{triage_effort}", triageResult.estimated_effort);
+
+  const response = await fetch(`${DEVIN_API_BASE}/sessions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt,
+      title: `PR: ${repo.full_name}#${issue.number} - ${issue.title}`,
+      tags: ["pr-creation", repo.full_name, `issue-${issue.number}`],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to create PR session: ${error}`);
   }
 
   return response.json();

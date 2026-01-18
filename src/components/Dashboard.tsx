@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { IssuesDashboard } from "./IssuesDashboard";
+import { WorkflowBoard } from "./WorkflowBoard";
 import { LoginButton } from "./LoginButton";
 import { RepoSelector } from "./RepoSelector";
 
@@ -96,65 +96,38 @@ export function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-1">
+      <main className="px-4 py-8 sm:px-6 lg:px-8">
+        {selectedRepo ? (
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Issue Workflow: {selectedRepo.owner}/{selectedRepo.repo}
+              </h2>
+              <button
+                onClick={handleClearRepo}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Change repository
+              </button>
+            </div>
+            <WorkflowBoard
+              owner={selectedRepo.owner}
+              repo={selectedRepo.repo}
+            />
+          </div>
+        ) : (
+          <div className="mx-auto max-w-2xl">
             <div className="rounded-lg border border-gray-200 bg-white p-6">
               <h2 className="mb-4 text-lg font-semibold text-gray-900">
                 Select Repository
               </h2>
-                            <RepoSelector
-                              onSelectRepo={handleSelectRepo}
-                              selectedRepo={
-                                selectedRepo ? `${selectedRepo.owner}/${selectedRepo.repo}` : null
-                              }
-                            />
+              <RepoSelector
+                onSelectRepo={handleSelectRepo}
+                selectedRepo={null}
+              />
             </div>
           </div>
-
-          <div className="lg:col-span-2">
-            {selectedRepo ? (
-              <div>
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Open Issues in {selectedRepo.owner}/{selectedRepo.repo}
-                  </h2>
-                                    <button
-                                      onClick={handleClearRepo}
-                                      className="text-sm text-gray-500 hover:text-gray-700"
-                                    >
-                                      Change repository
-                                    </button>
-                </div>
-                <IssuesDashboard
-                  owner={selectedRepo.owner}
-                  repo={selectedRepo.repo}
-                />
-              </div>
-            ) : (
-              <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-white">
-                <div className="text-center">
-                  <svg
-                    className="mx-auto h-12 w-12 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                    />
-                  </svg>
-                  <p className="mt-4 text-gray-500">
-                    Select a repository to view its issues
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </main>
     </div>
   );
