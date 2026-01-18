@@ -107,6 +107,34 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
     fetchIssues().finally(() => setLoading(false));
   }, [fetchIssues]);
 
+  useEffect(() => {
+    if (loading) return;
+
+    const newPollingIds = new Map<number, string>();
+    for (const issue of issues) {
+      const isTriageInProgress = issue.triage?.status === "in_progress" || issue.triage?.status === "pending";
+      const hasTriageSession = issue.triage?.sessionId || issue.workflow?.triageSessionId;
+      const notAlreadyPolling = !pollingTriageIds.has(issue.number);
+
+      if (isTriageInProgress && hasTriageSession && notAlreadyPolling) {
+        const sessionId = issue.triage?.sessionId || issue.workflow?.triageSessionId;
+        if (sessionId) {
+          newPollingIds.set(issue.number, sessionId);
+        }
+      }
+    }
+
+    if (newPollingIds.size > 0) {
+      setPollingTriageIds(prev => {
+        const next = new Map(prev);
+        for (const [issueNumber, sessionId] of newPollingIds) {
+          next.set(issueNumber, sessionId);
+        }
+        return next;
+      });
+    }
+  }, [issues, loading, pollingTriageIds]);
+
   const pollTriageStatus = useCallback(async (issueNumber: number, sessionId: string, issue: Issue) => {
     try {
       const issueData = encodeURIComponent(JSON.stringify({
@@ -323,7 +351,9 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
 
   const renderIssueCard = (issue: Issue, columnStatus: WorkflowStatus) => {
     const isExpanded = expandedIssue === issue.number;
-    const isTriaging = triagingIssues.has(issue.number) || pollingTriageIds.has(issue.number);
+    const isTriagingLocal = triagingIssues.has(issue.number) || pollingTriageIds.has(issue.number);
+    const isTriagingFromServer = issue.triage?.status === "in_progress" || issue.triage?.status === "pending";
+    const isTriaging = isTriagingLocal || isTriagingFromServer;
     const isStartingPR = startingPRIssues.has(issue.number) || pollingPRIds.has(issue.number);
     const triageResult = issue.triage?.structuredOutput;
 
@@ -371,6 +401,25 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
             ))}
             {issue.labels.length > 3 && (
               <span className="text-xs text-gray-400">+{issue.labels.length - 3}</span>
+            )}
+          </div>
+        )}
+
+        {isTriaging && !triageResult && (
+          <div className="mt-2">
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
+              <span className="h-2 w-2 animate-spin rounded-full border border-purple-700 border-t-transparent"></span>
+              Triaging...
+            </span>
+            {issue.triage?.sessionUrl && (
+              <a
+                href={issue.triage.sessionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 text-xs text-purple-600 hover:text-purple-800 underline"
+              >
+                View Session
+              </a>
             )}
           </div>
         )}
