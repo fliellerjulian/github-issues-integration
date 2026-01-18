@@ -95,6 +95,29 @@ export function Dashboard() {
                     </h1>
                   </div>
                   <div className="flex items-center gap-3">
+                    {selectedRepo && (
+                      <a
+                        href={`https://github.com/${selectedRepo.owner}/${selectedRepo.repo}/issues/new`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 4v16m8-8H4"
+                          />
+                        </svg>
+                        Create Issue
+                      </a>
+                    )}
                     <button
                       onClick={() => setIsSettingsOpen(true)}
                       className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"

@@ -66,13 +66,13 @@ interface WorkflowBoardProps {
   repo: string;
 }
 
-const WORKFLOW_COLUMNS: { status: WorkflowStatus; label: string; color: string; bgColor: string }[] = [
-  { status: "new", label: "New", color: "text-blue-700", bgColor: "bg-blue-50" },
-  { status: "triaged", label: "Triaged", color: "text-purple-700", bgColor: "bg-purple-50" },
-  { status: "processing", label: "Processing", color: "text-yellow-700", bgColor: "bg-yellow-50" },
-  { status: "awaiting_instructions", label: "Awaiting Instructions", color: "text-orange-700", bgColor: "bg-orange-50" },
-  { status: "pr", label: "PR", color: "text-green-700", bgColor: "bg-green-50" },
-  { status: "failed", label: "Failed", color: "text-red-700", bgColor: "bg-red-50" },
+const WORKFLOW_COLUMNS: { status: WorkflowStatus; label: string; color: string; borderColor: string; headerBgColor: string }[] = [
+  { status: "new", label: "New", color: "text-blue-700", borderColor: "border-blue-300", headerBgColor: "bg-blue-50" },
+  { status: "triaged", label: "Triaged", color: "text-purple-700", borderColor: "border-purple-300", headerBgColor: "bg-purple-50" },
+  { status: "processing", label: "Processing", color: "text-yellow-700", borderColor: "border-yellow-300", headerBgColor: "bg-yellow-50" },
+  { status: "awaiting_instructions", label: "Awaiting Instructions", color: "text-orange-700", borderColor: "border-orange-300", headerBgColor: "bg-orange-50" },
+  { status: "pr", label: "PR", color: "text-green-700", borderColor: "border-green-300", headerBgColor: "bg-green-50" },
+  { status: "failed", label: "Failed", color: "text-red-700", borderColor: "border-red-300", headerBgColor: "bg-red-50" },
 ];
 
 export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
@@ -512,18 +512,21 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
             {isExpanded && (
               <div className="mt-2 p-2 bg-gray-50 rounded text-xs space-y-2">
                 <div>
-                  <span className="font-medium">Scope:</span> {triageResult.scope}
+                  <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium mr-1">Scope</span>
+                  <span className="text-gray-600">{triageResult.scope}</span>
                 </div>
                 <div>
-                  <span className="font-medium">Approach:</span> {triageResult.suggested_approach}
+                  <span className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium mr-1">Approach</span>
+                  <span className="text-gray-600">{triageResult.suggested_approach}</span>
                 </div>
                 <div>
-                  <span className="font-medium">Effort:</span> {triageResult.estimated_effort}
+                  <span className="inline-block px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-medium mr-1">Effort</span>
+                  <span className="text-gray-600">{triageResult.estimated_effort}</span>
                 </div>
                 {triageResult.blockers.length > 0 && (
                   <div>
-                    <span className="font-medium">Blockers:</span>
-                    <ul className="list-disc list-inside ml-2">
+                    <span className="inline-block px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-medium mr-1">Blockers</span>
+                    <ul className="list-disc list-inside ml-2 text-gray-600">
                       {triageResult.blockers.map((b, i) => <li key={i}>{b}</li>)}
                     </ul>
                   </div>
@@ -591,15 +594,29 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
             </a>
           )}
 
-          {columnStatus === "pr" && issue.workflow?.prUrl && (
-            <a
-              href={issue.workflow.prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200"
-            >
-              View PR
-            </a>
+          {columnStatus === "pr" && (
+            <>
+              {issue.workflow?.prUrl && (
+                <a
+                  href={issue.workflow.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200"
+                >
+                  View PR
+                </a>
+              )}
+              {issue.workflow?.prSessionUrl && (
+                <a
+                  href={issue.workflow.prSessionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
+                >
+                  View Devin Session
+                </a>
+              )}
+            </>
           )}
 
           {columnStatus === "failed" && (
@@ -633,16 +650,16 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <div className="flex gap-4 min-w-max pb-4">
+    <div className="h-[calc(100vh-180px)] overflow-x-auto">
+      <div className="flex gap-4 min-w-max h-full pb-4">
         {WORKFLOW_COLUMNS.map(column => {
           const columnIssues = getIssuesByStatus(column.status);
           return (
             <div
               key={column.status}
-              className={`w-72 flex-shrink-0 rounded-lg ${column.bgColor} p-3`}
+              className={`w-72 flex-shrink-0 rounded-lg bg-white border-2 ${column.borderColor} flex flex-col h-full`}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className={`flex items-center justify-between p-3 ${column.headerBgColor} rounded-t-md border-b ${column.borderColor}`}>
                 <h3 className={`font-semibold ${column.color}`}>
                   {column.label}
                 </h3>
@@ -650,7 +667,7 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
                   {columnIssues.length}
                 </span>
               </div>
-              <div className="space-y-2 max-h-[calc(100vh-250px)] overflow-y-auto">
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {columnIssues.length === 0 ? (
                   <p className="text-sm text-gray-500 text-center py-4">No issues</p>
                 ) : (
