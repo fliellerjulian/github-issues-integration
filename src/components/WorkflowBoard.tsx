@@ -382,6 +382,10 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
 
   const getIssuesByStatus = (status: WorkflowStatus): Issue[] => {
     return issues.filter(issue => {
+      if (issue.state === "closed") {
+        return false;
+      }
+
       const workflowStatus = issue.workflow?.workflowStatus;
 
       if (workflowStatus) {
