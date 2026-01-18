@@ -138,6 +138,31 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
   }, [issues, loading, pollingTriageIds]);
 
   useEffect(() => {
+    if (loading) return;
+
+    const newPollingPRIds = new Map<number, string>();
+    for (const issue of issues) {
+      const isProcessing = issue.workflow?.workflowStatus === "processing";
+      const hasPRSession = issue.workflow?.prSessionId;
+      const notAlreadyPolling = !pollingPRIds.has(issue.number);
+
+      if (isProcessing && hasPRSession && notAlreadyPolling) {
+        newPollingPRIds.set(issue.number, issue.workflow!.prSessionId!);
+      }
+    }
+
+    if (newPollingPRIds.size > 0) {
+      setPollingPRIds(prev => {
+        const next = new Map(prev);
+        for (const [issueNumber, sessionId] of newPollingPRIds) {
+          next.set(issueNumber, sessionId);
+        }
+        return next;
+      });
+    }
+  }, [issues, loading, pollingPRIds]);
+
+  useEffect(() => {
     if (loading || hasAutoTriagedRef.current || issues.length === 0) return;
 
     const issuesToAutoTriage = issues.filter(issue => {
