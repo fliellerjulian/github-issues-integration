@@ -10,6 +10,8 @@ import {
   updateTriageSession,
   upsertIssueWorkflow,
   getTriageSession,
+  getUserSettings,
+  ConfidenceThreshold,
 } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
@@ -55,10 +57,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const CONFIDENCE_LEVELS: Record<ConfidenceThreshold, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+function meetsConfidenceThreshold(
+  actualConfidence: ConfidenceThreshold,
+  requiredThreshold: ConfidenceThreshold
+): boolean {
+  return CONFIDENCE_LEVELS[actualConfidence] >= CONFIDENCE_LEVELS[requiredThreshold];
+}
+
 export async function GET(request: NextRequest) {
   const session = await auth();
 
-  if (!session?.accessToken) {
+  if (!session?.accessToken || !session?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -78,6 +93,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const sessionDetails = await getSessionDetails(sessionId);
+    const userSettings = await getUserSettings(session.userId);
 
     const hasTriageResult = !!sessionDetails.structured_output;
     const isSessionEnded =
@@ -97,7 +113,11 @@ export async function GET(request: NextRequest) {
 
       const triageResult = sessionDetails.structured_output!;
       const shouldAutoStartPR =
-        triageResult.confidence_score === "high" &&
+        userSettings.auto_pr_enabled &&
+        meetsConfidenceThreshold(
+          triageResult.confidence_score as ConfidenceThreshold,
+          userSettings.pr_confidence_threshold
+        ) &&
         !triageResult.requires_human_input;
 
       if (owner && repo && issueNumberStr) {
