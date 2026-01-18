@@ -2,15 +2,44 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getUserSettings, updateUserSettings } from "@/lib/supabase";
 
+async function getGitHubUsername(accessToken: string): Promise<string | null> {
+  try {
+    const response = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    });
+    if (!response.ok) {
+      console.error("Failed to fetch GitHub user:", response.status);
+      return null;
+    }
+    const data = await response.json();
+    return data.login;
+  } catch (error) {
+    console.error("Error fetching GitHub user:", error);
+    return null;
+  }
+}
+
 export async function GET() {
   const session = await auth();
 
-  if (!session?.accessToken || !session?.userId) {
+  if (!session?.accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const settings = await getUserSettings(session.userId);
+    let userId: string | null | undefined = session.userId;
+    
+    if (!userId) {
+      userId = await getGitHubUsername(session.accessToken);
+      if (!userId) {
+        return NextResponse.json({ error: "Failed to get user identity" }, { status: 500 });
+      }
+    }
+
+    const settings = await getUserSettings(userId);
     return NextResponse.json(settings);
   } catch (error) {
     console.error("Error fetching user settings:", error);
@@ -24,11 +53,20 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await auth();
 
-  if (!session?.accessToken || !session?.userId) {
+  if (!session?.accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
+    let userId: string | null | undefined = session.userId;
+    
+    if (!userId) {
+      userId = await getGitHubUsername(session.accessToken);
+      if (!userId) {
+        return NextResponse.json({ error: "Failed to get user identity" }, { status: 500 });
+      }
+    }
+
     const body = await request.json();
     const { auto_triage_enabled, auto_pr_enabled, pr_confidence_threshold } = body;
 
@@ -58,7 +96,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updatedSettings = await updateUserSettings(session.userId, updates);
+    const updatedSettings = await updateUserSettings(userId, updates);
 
     if (!updatedSettings) {
       return NextResponse.json(
