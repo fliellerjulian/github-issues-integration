@@ -437,13 +437,19 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                       <div className="flex flex-col gap-1">
                         {triageStatuses[issue.number].result ? (
                           <div className="flex items-center gap-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
-                                triageStatuses[issue.number].result!.confidence_score
-                              )}`}
-                            >
-                              {triageStatuses[issue.number].result!.confidence_score} confidence
-                            </span>
+                            {triageStatuses[issue.number].result!.requires_human_input ? (
+                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-800">
+                                Human Input Required
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
+                                  triageStatuses[issue.number].result!.confidence_score
+                                )}`}
+                              >
+                                {triageStatuses[issue.number].result!.confidence_score} confidence
+                              </span>
+                            )}
                             <button
                               onClick={() => toggleTriageExpanded(issue.number)}
                               className="text-gray-500 hover:text-gray-700 transition-colors"
@@ -483,13 +489,19 @@ export function IssuesDashboard({ owner, repo }: IssuesDashboardProps) {
                       <div className="flex flex-col gap-1">
                         {issue.triage.status === "completed" && issue.triage.confidence ? (
                           <div className="flex items-center gap-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
-                                issue.triage.confidence
-                              )}`}
-                            >
-                              {issue.triage.confidence} confidence
-                            </span>
+                            {issue.triage.structuredOutput?.requires_human_input ? (
+                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-800">
+                                Human Input Required
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getConfidenceColor(
+                                  issue.triage.confidence
+                                )}`}
+                              >
+                                {issue.triage.confidence} confidence
+                              </span>
+                            )}
                             {issue.triage.structuredOutput && (
                               <button
                                 onClick={() => toggleTriageExpanded(issue.number)}
