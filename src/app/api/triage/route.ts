@@ -14,6 +14,26 @@ import {
   ConfidenceThreshold,
 } from "@/lib/supabase";
 
+async function getGitHubUsername(accessToken: string): Promise<string | null> {
+  try {
+    const response = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    });
+    if (!response.ok) {
+      console.error("Failed to fetch GitHub user:", response.status);
+      return null;
+    }
+    const data = await response.json();
+    return data.login;
+  } catch (error) {
+    console.error("Error fetching GitHub user:", error);
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth();
 
@@ -73,8 +93,17 @@ function meetsConfidenceThreshold(
 export async function GET(request: NextRequest) {
   const session = await auth();
 
-  if (!session?.accessToken || !session?.userId) {
+  if (!session?.accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let userId: string | null | undefined = session.userId;
+  
+  if (!userId) {
+    userId = await getGitHubUsername(session.accessToken);
+    if (!userId) {
+      return NextResponse.json({ error: "Failed to get user identity" }, { status: 500 });
+    }
   }
 
   const searchParams = request.nextUrl.searchParams;
@@ -93,7 +122,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const sessionDetails = await getSessionDetails(sessionId);
-    const userSettings = await getUserSettings(session.userId);
+    const userSettings = await getUserSettings(userId);
 
     const hasTriageResult = !!sessionDetails.structured_output;
     const isSessionEnded =
