@@ -125,7 +125,7 @@ export function RepoSelector({ onSelectRepo, selectedRepo }: RepoSelectorProps) 
               </div>
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">
-                  {repo.open_issues_count} issues
+                  {repo.open_issues_count > 99 ? "99+" : repo.open_issues_count} issues
                 </span>
               </div>
             </button>
