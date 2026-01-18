@@ -84,7 +84,9 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
   const [startingPRIssues, setStartingPRIssues] = useState<Set<number>>(new Set());
   const [pollingTriageIds, setPollingTriageIds] = useState<Map<number, string>>(new Map());
   const [pollingPRIds, setPollingPRIds] = useState<Map<number, string>>(new Map());
+  const [autoTriagedIssues, setAutoTriagedIssues] = useState<Set<number>>(new Set());
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasAutoTriagedRef = useRef(false);
 
   const fetchIssues = useCallback(async () => {
     try {
@@ -134,6 +136,63 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
       });
     }
   }, [issues, loading, pollingTriageIds]);
+
+  useEffect(() => {
+    if (loading || hasAutoTriagedRef.current || issues.length === 0) return;
+
+    const issuesToAutoTriage = issues.filter(issue => {
+      const hasNoTriageStatus = !issue.triage?.status;
+      const hasNoTriageResult = !issue.triage?.structuredOutput;
+      const notAlreadyTriaging = !triagingIssues.has(issue.number) && !pollingTriageIds.has(issue.number);
+      const notAutoTriaged = !autoTriagedIssues.has(issue.number);
+      return hasNoTriageStatus && hasNoTriageResult && notAlreadyTriaging && notAutoTriaged;
+    });
+
+    if (issuesToAutoTriage.length === 0) return;
+
+    hasAutoTriagedRef.current = true;
+
+    const autoTriageIssues = async () => {
+      for (const issue of issuesToAutoTriage) {
+        try {
+          const response = await fetch("/api/triage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              owner,
+              repo,
+              issue: {
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                labels: issue.labels,
+                user: issue.user,
+                created_at: issue.created_at,
+              },
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setAutoTriagedIssues(prev => new Set(prev).add(issue.number));
+            setTriagingIssues(prev => new Set(prev).add(issue.number));
+            if (data.session_id) {
+              setPollingTriageIds(prev => {
+                const next = new Map(prev);
+                next.set(issue.number, data.session_id);
+                return next;
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`Error auto-triaging issue #${issue.number}:`, err);
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    };
+
+    autoTriageIssues();
+  }, [issues, loading, owner, repo, triagingIssues, pollingTriageIds, autoTriagedIssues]);
 
   const pollTriageStatus = useCallback(async (issueNumber: number, sessionId: string, issue: Issue) => {
     try {
