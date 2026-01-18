@@ -159,8 +159,6 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              owner,
-              repo,
               issue: {
                 number: issue.number,
                 title: issue.title,
@@ -168,6 +166,11 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
                 labels: issue.labels,
                 user: issue.user,
                 created_at: issue.created_at,
+              },
+              repository: {
+                full_name: `${owner}/${repo}`,
+                owner,
+                name: repo,
               },
             }),
           });
