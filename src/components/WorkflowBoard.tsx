@@ -496,9 +496,15 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
               onClick={() => setExpandedIssue(isExpanded ? null : issue.number)}
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
             >
-              <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${getConfidenceColor(triageResult.confidence_score)}`}>
-                {triageResult.confidence_score} confidence
-              </span>
+              {triageResult.requires_human_input ? (
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-800">
+                  Human Input Required
+                </span>
+              ) : (
+                <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${getConfidenceColor(triageResult.confidence_score)}`}>
+                  {triageResult.confidence_score} confidence
+                </span>
+              )}
               <svg
                 className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                 fill="none"
