@@ -530,20 +530,12 @@ export function WorkflowBoard({ owner, repo }: WorkflowBoardProps) {
         )}
 
         <div className="mt-2 flex flex-wrap gap-1">
-          {columnStatus === "new" && (
+          {columnStatus === "new" && !isTriaging && (
             <button
               onClick={() => handleTriage(issue)}
-              disabled={isTriaging}
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium bg-purple-600 text-white hover:bg-purple-700"
             >
-              {isTriaging ? (
-                <>
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                  Triaging...
-                </>
-              ) : (
-                "Triage"
-              )}
+              Triage
             </button>
           )}
 
