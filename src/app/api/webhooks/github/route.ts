@@ -64,27 +64,22 @@ async function handleIssueEvent(payload: GitHubIssueWebhookPayload) {
   );
 
   try {
-    if (action === "opened") {
+    const session = await createTriageSession(issue, repository);
+
+    console.log(`Created Devin session: ${session.session_id}`);
+
+    try {
       await upsertIssueWorkflow({
         repo_owner: repository.owner.login,
         repo_name: repository.name,
         issue_number: issue.number,
         workflow_status: "new",
+        triage_session_id: session.session_id,
+        triage_session_url: session.url,
       });
+    } catch (workflowError) {
+      console.error("Error updating workflow (non-blocking):", workflowError);
     }
-
-    const session = await createTriageSession(issue, repository);
-
-    console.log(`Created Devin session: ${session.session_id}`);
-
-    await upsertIssueWorkflow({
-      repo_owner: repository.owner.login,
-      repo_name: repository.name,
-      issue_number: issue.number,
-      workflow_status: "new",
-      triage_session_id: session.session_id,
-      triage_session_url: session.url,
-    });
 
     const githubToken = process.env.GITHUB_ACCESS_TOKEN;
     if (githubToken) {
