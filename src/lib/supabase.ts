@@ -295,3 +295,88 @@ export async function upsertIssueWorkflow(
 
   return data;
 }
+
+export type ConfidenceThreshold = "low" | "medium" | "high";
+
+export interface UserSettings {
+  id?: string;
+  user_id: string;
+  auto_triage_enabled: boolean;
+  auto_pr_enabled: boolean;
+  pr_confidence_threshold: ConfidenceThreshold;
+  created_at?: string;
+  updated_at?: string;
+}
+
+const DEFAULT_USER_SETTINGS: Omit<UserSettings, "user_id" | "id" | "created_at" | "updated_at"> = {
+  auto_triage_enabled: true,
+  auto_pr_enabled: true,
+  pr_confidence_threshold: "high",
+};
+
+export async function getUserSettings(userId: string): Promise<UserSettings> {
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select()
+    .eq("user_id", userId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return {
+        user_id: userId,
+        ...DEFAULT_USER_SETTINGS,
+      };
+    }
+    console.error("Error getting user settings:", error);
+    return {
+      user_id: userId,
+      ...DEFAULT_USER_SETTINGS,
+    };
+  }
+
+  return data;
+}
+
+export async function updateUserSettings(
+  userId: string,
+  settings: Partial<Omit<UserSettings, "id" | "user_id" | "created_at" | "updated_at">>
+): Promise<UserSettings | null> {
+  const { data, error } = await supabase
+    .from("user_settings")
+    .upsert(
+      {
+        user_id: userId,
+        ...settings,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    )
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error updating user settings:", error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function getUserSettingsByUserId(userId: string): Promise<UserSettings | null> {
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select()
+    .eq("user_id", userId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return null;
+    }
+    console.error("Error getting user settings:", error);
+    return null;
+  }
+
+  return data;
+}

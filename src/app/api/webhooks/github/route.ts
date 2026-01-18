@@ -5,7 +5,7 @@ import {
   GitHubIssueCommentWebhookPayload,
 } from "@/lib/github-webhook";
 import { createTriageSession, postTriageResultToGitHub } from "@/lib/devin";
-import { upsertIssueWorkflow } from "@/lib/supabase";
+import { upsertIssueWorkflow, getUserSettings } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -55,6 +55,19 @@ async function handleIssueEvent(payload: GitHubIssueWebhookPayload) {
   if (action !== "opened" && action !== "edited") {
     return NextResponse.json(
       { message: `Issue action '${action}' ignored` },
+      { status: 200 }
+    );
+  }
+
+  const repoOwner = repository.owner.login;
+  const userSettings = await getUserSettings(repoOwner);
+
+  if (!userSettings.auto_triage_enabled) {
+    console.log(
+      `Auto-triage disabled for ${repoOwner}, skipping issue ${repository.full_name}#${issue.number}`
+    );
+    return NextResponse.json(
+      { message: "Auto-triage disabled for this user" },
       { status: 200 }
     );
   }
